@@ -1,0 +1,333 @@
+TRIPADVISOR
+
+
+
+
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+import datetime
+import csv
+import json
+import time
+import re
+#from titlecase import titlecase
+
+# Initialize driver
+
+URL = input("Quel URL à scraper ? > ")
+
+LS = input("In which language do you want to scrape the reviews? Please enter all for all; en for english and fr for french >")
+
+def init_driver():
+	driver = driver = webdriver.Firefox()
+	driver.wait = WebDriverWait(driver, 3)
+	return driver
+
+def get_hotel_name():
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	name_container = soup.find("h1",{"class":"ui_header h1"})
+	name = name_container.getText()
+	return name
+
+
+def get_last_page_num():
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	#print(soup)
+	#page_num_container = soup.find("div",{"id":"REVIEWS"})
+	#print(page_num_container)
+	#element = driver.wait.until(EC.presence_of_element_located((By.CLASS_NAME,"pageNumbers")))
+	#WebDriverWait(driver,90).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
+	page_num_container = soup.find("div",{"class":"pageNumbers"})
+	#print(page_num_container)
+	try:
+		pg_no = page_num_container.findAll("a",{"class":"pageNum"})[-1].get_text()
+	except (NameError,AttributeError) as e :
+		pg_no = "Only one page"
+	print("last page number:"+pg_no)
+	return pg_no
+
+def get_next_url():
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	#page_num_container = soup.find("div",{"id":"REVIEWS"})
+	page_num_container = soup.find("div",{"class":"unified ui_pagination"})
+	#print(page_num_container)
+	try:
+		link = page_num_container.find("a",{"class":"nav next taLnk ui_button primary"}).get("href")
+	except AttributeError:
+		link=""
+	print("next link:"+link)
+	return link
+
+def make_date(review_post_month):
+	months = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+	j = 0
+	while(j < len(months)):
+		if(review_post_month!=months[j]):
+			j = j + 1
+		else:
+			j = j + 1
+			if (j < 10):
+				final_month = "0" + str(j)
+				#print( "inside month function"+ final_month)
+				return final_month
+			else:
+				final_month = str(j)
+				#print( "inside month function"+ final_month)
+				return final_month
+
+def get_review(main_container):
+	temp_list = dict()
+	emoji_pattern = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
+	
+	try:	
+		name= main_container.find("div",{"class":"info_text pointer_cursor"}).find("div").getText().strip()
+		temp_list["name"] = name
+	except (NameError,AttributeError) as e :
+		temp_list["name"] = "N/A"
+
+
+	try:	
+		place= main_container.find("div",{"class":"info_text pointer_cursor"}).find("div",{"class":"userLoc"}).find("strong").getText().strip()
+		temp_list["place"] = place
+	except (NameError,AttributeError) as e :
+		temp_list["place"] = "N/A"
+
+
+	try:
+		rating = main_container.find("div",{"class":"ui_column is-9"})
+		star = rating.findAll("span")[0].get("class")
+		staar=star[1].split('_')
+		temp_list["star"] = (int(staar[1]))/10
+	except (NameError,AttributeError) as e :
+		temp_list["star"] = "N/A"
+
+
+		"""
+		star = star[1]
+		print("first val :"+ star)
+		star = star[7:8]
+		print("Second val :"+ star)
+		print(star)
+		
+		temp_list["star"] = star
+
+		
+		date= main_container.find("span",{"class":"ratingDate"}).get("title").getText().strip()
+		date = datetext
+		date_copy = date
+		print(date)
+		
+		date = date.split(" ")[-2] + date_copy.split(" ")[-1]
+		date = titlecase(date)
+		"""
+		"""
+		date_parts = date.split(" ")
+		date_date = date_parts[0]
+		date_month = date_parts[1]
+		print("checking for the date of month now:"+date_month)
+		date_year = date_parts[2]
+		new_month = make_date(date_month)
+		final_date = date_date + "/" + str(new_month) + "/" + date_year
+		"""
+		#print("Date of Review: " + date)
+	try:	
+		date= main_container.find("div",{"class":"prw_rup prw_reviews_stay_date_hsx"}).getText().strip()
+		try:
+			date1=date.split(':')		
+			temp_list["date"] = date1[1]
+		except (IndexError) as e :
+			date1= main_container.find("span",{"class":"ratingDate"}).get("title")
+			temp_list["date"] = date1[1]
+
+	except (NameError,AttributeError) as e :
+		temp_list["date"] = "N/A"
+
+	try:	
+		rev_title = main_container.find("span",{"class":"noQuotes"})
+		#print(rev_title)
+		rvt = rev_title.getText()
+		rvt = emoji_pattern.sub(r'',rvt)
+		#print(rvt)
+		temp_list["title"] = rvt
+	except (NameError,AttributeError) as e :
+		temp_list["title"] = "N/A"
+
+	try:
+		textcont = main_container.find("div",{"class":"entry"}).find("p",{"class":"partial_entry"})
+		text = textcont.getText()
+		text = emoji_pattern.sub(r'',text)
+		text = text.strip().replace("\n","")
+		#print(text)
+		temp_list["text"] = text
+	except (NameError,AttributeError) as e :
+		temp_list["text"] = "N/A"
+
+
+
+	return temp_list
+
+# Set up driver
+def get_data():
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+
+	new=soup.find("div",{"class":"entry"})
+
+	
+	try:
+		driver.execute_script("document.getElementsByClassName('taLnk ulBlueLinks')[0].click()")
+	except (NameError,AttributeError) as e :
+		print("not clicked")
+	
+	time.sleep(10)
+
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+
+	#test_container = soup.find("div",{"id":"REVIEWS"})
+	mc = soup.findAll("div",{"class":"review-container"})
+	#print(mc)
+	reviews = []
+	reviews = [get_review(main_container) for main_container in mc]
+	
+
+	return reviews
+
+"""
+		product_description = main_container.find("div",{"class":"hubo-title__text"}).text.strip()
+
+		product_brand_properties = main_container.find("div",{"class":"product-properties"})
+		product_brand_container = product_brand_properties.find("table").find("tr")
+		product_brand_row = product_brand_container.findAll("td")
+		product_brand = product_brand_row[1].find("strong").text.strip()
+		print("BRAND: " + product_brand)
+	
+		price_block = main_container.find("div",{"class":"price-block right"})
+
+		current_price = price_block.find("div",{"class":"price"}).text.replace(",",".").strip()
+		current_price = current_price.replace("-","00")
+
+		test_discount = main_container.find("div","striped-parent")
+
+		if test_discount:
+			previous_price = price_block.find("div",{"class":"striped-parent"}).text.replace(",",".").strip()
+			previous_price = previous_price.replace("-","00")
+			
+			discount = price_block.find("div",{"class":"discount"}).text
+		else:
+			print("No discounts at the moment.")
+			previous_price = "No Previous Price"
+			discount = "No discounts available"
+
+		print("Product Description: " + product_brand + " " + product_description)
+		print("Current Price: " + current_price)
+		print("Previous Price: " + previous_price)
+		print("Discount: " + discount)
+		
+		f.write(new_ean + "," + product_brand + " " + product_description + "," + current_price + "," + previous_price + "," + discount + "\n")
+
+	except Exception as e:
+		print(new_ean + ": Sorry not found")
+
+		f.write(new_ean + "," + "Sorry not found" + "\n")
+"""
+
+
+#Call Driver / Chrome
+driver = init_driver()
+driver.get(URL)
+#WebDriverWait(driver,90).until(EC.presence_of_element_located((By.CSS_SELECTOR,"#component_18")))
+element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".listContainer")))
+hotel_name = get_hotel_name()
+
+res = driver.execute_script("return document.documentElement.outerHTML")
+soup = BeautifulSoup(res, "html.parser")
+container = soup.find("div",{"id":"REVIEWS"})
+#container = container.find("div",{"data-name":"language"})
+#print(container)
+if(LS=="all"):
+	driver.execute_script("document.getElementById('filters_detail_language_filterLang_ALL').click()")
+elif (LS=="fr"):
+	driver.execute_script("document.getElementById('filters_detail_language_filterLang_fr').click()")
+elif (LS=="en"):
+	driver.execute_script("document.getElementById('filters_detail_language_filterLang_en').click()")
+
+time.sleep(3)
+element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".listContainer")))
+
+
+
+count=1
+review_list = []
+review_list.extend(get_data())
+li = get_next_url()
+while (li!=""):
+	count = count+1
+	#url_ar = URL.split('?')
+	#print(url_ar[0]+li)
+	driver.get("https://www.tripadvisor.fr/"+li)
+	print("https://www.tripadvisor.fr/"+li)
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	#container = soup.find("div",{"id":"REVIEWS"})
+	time.sleep(3)
+	element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".listContainer")))
+	review_list.extend(get_data())
+	li = get_next_url()
+
+
+print("Ecriture dans le fichier csv ...")
+
+# Initialisation de la date pour le nom du fichier
+date = datetime.datetime.now()
+date_complete = str(date.year) + "-" + str(date.month) + "-" + str(date.day)
+
+# Initialisation du fichier csv
+with open("Tripadvisor " + hotel_name + " - " + date_complete + ".csv",
+ "w",
+  newline="") as csvFile:
+    writer = csv.writer(csvFile)
+    writer.writerow(["name","place","Date", "Stars", "Title", "Text"])
+
+    for review in review_list:
+        try:
+        	if(review!={}):
+        		writer.writerow([review["name"], review["place"],review["date"], review["star"], review["title"], review["text"]])
+        except UnicodeEncodeError:
+            pass
+
+print("Ecriture dans le fichier json ...")
+
+# Initialisation du fichier json
+with open("Tripadvisor " + hotel_name + " - " + date_complete + ".json", "w+") as jsonFile:
+    json.dump(review_list, jsonFile, indent=4)
+
+driver.quit()
+# Write to CSV file
+"""
+filename = "HUBO_products_by_EAN.csv"
+f = open(filename, "w")
+
+headers = "EAN Code, Product Name, Current Price, Previous Price, Discount\n"
+
+f.write(headers)
+"""
+#Run Driver / Chrome
+"""
+for rx in range(cols,rows):
+	print("\n")
+	print(rx, ": ", int(sh.cell(rx,cols-1).value))
+	get_data(driver,int(sh.cell(rx,cols-1).value))
+
+f.close()
+"""
+# Exit Driver / Chrome
+
