@@ -1,0 +1,284 @@
+#TRUSTPILOT WEBSCRAPPER 2019
+
+
+
+from selenium import webdriver
+from bs4 import BeautifulSoup
+import csv
+import datetime
+import re
+import json
+import getpass
+from random import randint
+from time import sleep
+import re
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+
+
+# VERSION 2.0
+
+""" --- DONNEES --- """
+
+URL = input("Quel URL à scraper ? > ")
+
+LS = input("Enter the language code for scraping the reviews; en for english, fr for french or all for all languages >")
+
+URL = URL+"?languages="+LS
+
+""" --- DONNEES --- """
+
+""" --- FONCTIONS --- """
+
+
+def get_url(url):
+    """
+    Fonction permettant de nommé le .csv
+    """
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, "lxml")
+
+    name = soup.html.find("h1", {"class": "multi-size-header"}).find("span", {"class": "multi-size-header__big"}).text.strip()
+
+    return name
+
+
+def compter_etoile(str):
+    """
+    Fonction permettant de compter les étoiles
+    """
+    list_star = re.findall('\d', str)
+    stars = "".join(list_star)
+
+    return stars
+
+
+def turn_date(date):
+    """
+    Fonction pour convertir la date
+    """
+    new_date = date[:10]
+
+    return new_date
+
+
+def to_dict(div):
+    """
+    Fonction permettant de stocker les données dans un dictionnaire
+    """
+    emoji_pattern = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
+    
+    name = div.find("div", {"class": "consumer-information__name"}).text.strip()
+    rate = div.find("div", {"class": "review-content"})
+    star_class = rate.find("div", {"class": "review-content-header"})
+    body = div.find("div", {"class": "review-content__body"})
+
+    date = rate.find("time").get("datetime")
+    
+    star = div.find("div", {"class": "star-rating star-rating--medium"}).find("img").get("alt")
+    
+    
+    title = body.find("a").text.strip().replace(";", "")
+    title = emoji_pattern.sub(r'', title)
+    texte = body.find("p").text.strip().replace(";", "")
+    texte = emoji_pattern.sub(r'', texte)
+
+    reviews_data = dict()
+    reviews_data["name"] = name
+    reviews_data["Date"] = turn_date(date)
+    reviews_data["Stars"] = compter_etoile(star)
+    reviews_data["Title"] = title
+    #print(title)
+    reviews_data["Text"] = texte
+
+    #print(texte)
+
+    return reviews_data
+
+def get_reviews_data():
+    """
+    Fonction permettant de scraper la page ouverte
+    """
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, "lxml")
+
+    reviews_html = soup.html.body.find("section", {"class": "reviews-container"}).findAll("div", {"class": "review-card"})
+
+    reviews = []
+
+    for div in reviews_html:
+        wait = to_dict(div)
+        reviews.append(wait)
+
+    #print(reviews) 
+
+    return reviews
+
+
+def get_number_last_page():
+    """
+    Fonction permettant de scraper la page ouverte
+    """
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, "lxml")
+    pagination = soup.html.body.find("nav", {"class": "pagination-container AjaxPager"}) \
+        .findAll("a", {"class": "pagination-page"})
+
+    liste_nombre_page = []
+
+    for a in pagination:
+        liste_nombre_page.append(a.get("data-page-number"))
+
+    for element in liste_nombre_page:
+        try:
+            element = int(element)
+        except ValueError:
+            liste_nombre_page.remove(element)
+
+    liste_nombre_page = [int(i) for i in liste_nombre_page]
+
+    try:
+        last_page = max(liste_nombre_page)
+    except ValueError:
+        last_page = 1
+
+    return last_page
+
+def get_testeur():
+
+	html = driver.page_source
+	soup = BeautifulSoup(html, "lxml")
+	etape = soup.html.body.find("nav", {"class": "pagination-container AjaxPager"})\
+                .find("a", {"data-page-number": "next-page"})
+
+	return etape
+
+
+""" --- FONCTIONS --- """
+
+""" --- SCRAP --- """
+
+#driver = webdriver.Firefox(capabilities=cap, executable_path="C:\\Python\\Scrap\\geckodriver.exe")
+driver = webdriver.Firefox()
+driver.get(URL)
+
+name_page = get_url(URL)
+
+print("Connexion ...")
+
+# Contient le nombre de page à scraper
+last_page = get_number_last_page()
+
+reviews_extract = get_reviews_data()
+
+reviews_all = []
+reviews_all.extend(reviews_extract)
+etape = URL
+
+date = datetime.datetime.now()
+date_complete = str(date.year) + "-" + str(date.month) + "-" + str(date.day)
+
+# Initialisation du fichier csv
+with open("Trustpilot " + name_page + " - " + date_complete + ".csv",
+ "a", encoding='utf-8',
+  newline="") as csvFile:
+    writer = csv.writer(csvFile)
+    writer.writerow(["name","Date", "Stars", "Title", "Text"])
+    #print(reviews_all)
+    for review in reviews_all:
+                    writer.writerow([review["name"],review["Date"], review["Stars"], review["Title"], review["Text"]])
+with open("Trustpilot " + name_page + " - " + date_complete + ".json", "a") as jsonFile:
+                json.dump(reviews_all, jsonFile, indent=4)
+
+#print("Scraping des {0} pages ...".format(last_page))
+i=1
+while etape is not None:
+        try:
+            #html = driver.page_source
+            #soup = BeautifulSoup(html, "lxml")
+            #sleep(randint(8,15))
+            #element = soup.html.body.find("div", {"class": "button-container button-container--centered"})
+            #print(element)
+            #element.click()
+            reviews_all = []
+            etape = get_testeur()
+            etape = etape.get("href")
+            url_ar=etape.split('?')
+            #print(url_ar)
+            testeur = "https://www.trustpilot.fr" + url_ar[0] + "?languages="+LS+"&"+url_ar[1]
+            driver.get(testeur)
+            print( " Scraping "+ testeur)
+            sleep(randint(8,15))
+            collecting_reviews = get_reviews_data()
+            reviews_all.extend(collecting_reviews)
+            #print(reviews_all)
+            with open("Trustpilot " + name_page + " - " + date_complete + ".csv","a", encoding='utf-8', newline="") as csvFile:
+                writer = csv.writer(csvFile)
+                for review in reviews_all:
+                    writer.writerow([review["name"],review["Date"], review["Stars"], review["Title"], review["Text"]])
+            with open("Trustpilot " + name_page + " - " + date_complete + ".json", "a") as jsonFile:
+                json.dump(reviews_all, jsonFile, indent=4)
+            i = i + 1
+        except AttributeError:
+            etape = get_testeur()
+            with open("Trustpilot " + name_page + " - " + date_complete + ".csv","a", encoding='utf-8', newline="") as csvFile:
+                writer = csv.writer(csvFile)
+                for review in reviews_all:
+                    writer.writerow([review["name"],review["Date"], review["Stars"], review["Title"], review["Text"]])
+            with open("Trustpilot " + name_page + " - " + date_complete + ".json", "a") as jsonFile:
+                json.dump(reviews_all, jsonFile, indent=4)
+        except UnicodeEncodeError:
+            pass
+            """
+            if i==1:
+                etape = URL + "?languages="+LS+"&page=2"
+                driver.get(etape)
+                print( " Scraping "+ etape)
+                sleep(randint(8,15))
+                collecting_reviews = get_reviews_data()
+                reviews_all.extend(collecting_reviews)
+                i = i + 1
+            else: etape = get_testeur()
+            """
+                
+""" --- SCRAP --- """
+
+""" --- Extraction --- """
+"""
+print("Ecriture dans le fichier csv ...")
+
+# Initialisation de la date pour le nom du fichier
+date = datetime.datetime.now()
+date_complete = str(date.year) + "-" + str(date.month) + "-" + str(date.day)
+
+# Initialisation du fichier csv
+with open("Trustpilot " + name_page + " - " + date_complete + ".csv",
+ "w",
+  newline="") as csvFile:
+    writer = csv.writer(csvFile)
+    writer.writerow(["Date", "Stars", "Title", "Text"])
+
+    for review in reviews_all:
+        try:
+            writer.writerow([review["Date"], review["Stars"], review["Title"], review["Text"]])
+        except UnicodeEncodeError:
+            pass
+
+print("Ecriture dans le fichier json ...")
+
+# Initialisation du fichier json
+with open("Trustpilot " + name_page + " - " + date_complete + ".json", "w+") as jsonFile:
+    json.dump(reviews_all, jsonFile, indent=4)
+"""
+
+driver.quit()
+
+print("Les avis de Trustpilot ont été récupérés avec succès !")
+
+
+
+
+
+
