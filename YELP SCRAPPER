@@ -1,0 +1,275 @@
+# YELP WEBSCARPPER 2019
+YELP
+
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+import datetime
+import csv
+import json
+import time
+import re
+#from titlecase import titlecase
+
+# Initialize driver
+
+URL = input("Quel URL à scraper ? > ")
+
+LS = input("In which language do you want to scrape the reviews? Please enter en for english and fr for french >")
+
+def init_driver():
+	driver = driver = webdriver.Firefox()
+	driver.wait = WebDriverWait(driver, 3)
+	return driver
+
+def get_name():
+	name = ""
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	name_container = soup.find("h1",{"class":"lemon--h1__373c0__2ZHSL heading--h1__373c0__1VUMO heading--no-spacing__373c0__1PzQP heading--inline__373c0__1F-Z6"})
+	name = name_container.getText()
+	return name
+
+
+def get_last_page_num():
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	page_num_container = soup.find("div",{"class":"lemon--div__373c0__1mboc u-padding-b2 border-color--default__373c0__2oFDT text-align--center__373c0__1l506"}).find("span",{"class":"lemon--span__373c0__3997G text__373c0__2pB8f text-color--inherit__373c0__w_15m text-align--left__373c0__2pnx_"})
+		#print(page_num_container)
+	#element = driver.wait.until(EC.presence_of_element_located((By.CLASS_NAME,"pageNumbers")))
+	#WebDriverWait(driver,90).until(EC.presence_of_element_located((By.CLASS_NAME, "pageNumbers")))
+	page_num_text = page_num_container.getText()
+	print(page_num_text)
+	#print(page_num_text.rsplit(None,1)[1])
+	pg_no = page_num_text.rsplit(" ",1)
+	pg_num = pg_no[1]
+	print("last page number:"+pg_num)
+	return pg_num
+
+"""
+def get_next_url(count):
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+	try:
+        next_button = driver.find_element_by_class_name('lemon--a__373c0__IEZFH link__373c0__29943 next-link navigation-button__373c0__2fJmR link-color--blue-dark__373c0__1mhJo link-size--default__373c0__1skgq')
+    except NoSuchElementException:
+        break
+    next_button.click()
+	return next_button
+
+def make_date(review_post_month):
+	months = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+	j = 0
+	while(j < len(months)):
+		if(review_post_month!=months[j]):
+			j = j + 1
+		else:
+			j = j + 1
+			if (j < 10):
+				final_month = "0" + str(j)
+				#print( "inside month function"+ final_month)
+				return final_month
+			else:
+				final_month = str(j)
+				#print( "inside month function"+ final_month)
+				return final_month
+"""
+
+def get_review(main_container):
+	temp_list = dict()
+	emoji_pattern = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
+	
+	Name_person = main_container.find("a",{"class":"lemon--a__373c0__IEZFH link__373c0__29943 link-color--blue-dark__373c0__1mhJo link-size--default__373c0__1skgq"}).find("span",{"class":"lemon--span__373c0__3997G text__373c0__2pB8f fs-block text-color--inherit__373c0__w_15m text-align--left__373c0__2pnx_ text-weight--bold__373c0__3HYJa"})
+	print(Name_person)
+	Name1 = Name_person.getText()
+	print(Name1)
+	temp_list["name"] = Name1
+
+	rating = main_container.find("span",{"class":"lemon--span__373c0__3997G display--inline__373c0__1DbOG border-color--default__373c0__2oFDT"})
+	#print(rating)
+	star = rating.find("div").get("aria-label")
+	star = star[0]
+	#print(star)
+	temp_list["star"] = str(star)
+
+	datetext = main_container.find("span",{"class":"lemon--span__373c0__3997G text__373c0__2pB8f text-color--mid__373c0__3G312 text-align--left__373c0__2pnx_"})
+	date = datetext.getText().strip().rsplit(None,1)
+
+	"""
+	
+	date = titlecase(date)
+	date_parts = date.split(" ")
+	date_date = date_parts[0]
+	date_month = date_parts[1]
+	print("checking for the date of month now:"+date_month)
+	date_year = date_parts[2]
+	new_month = make_date(date_month)
+	final_date = date_date + "/" + str(new_month) + "/" + date_year
+	"""
+	try:
+		#print("Date of Review: " + date[1])
+		temp_list["date"] = date[1]
+	except IndexError:
+		#print("Date of Review: " + date[0])
+		temp_list["date"] = date[0]
+
+	textcont = main_container.find("p",{"class":"lemon--p__373c0__3Qnnj text__373c0__2pB8f comment__373c0__3EKjH text-color--normal__373c0__K_MKN text-align--left__373c0__2pnx_"}).find("span",{"class":"lemon--span__373c0__3997G"})
+	text = textcont.getText()
+	text = emoji_pattern.sub(r'',text)
+	text = re.sub('<.*?>','',text)
+	#print(text)
+	text = text.strip().replace("\n","")
+	text = text.strip().replace(";","")
+	
+	temp_list["text"] = text
+
+
+
+	return temp_list
+
+# Set up driver
+def get_data():
+	#print("exec scrapping now")
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+
+	mc = soup.findAll("div",{"class":"lemon--div__373c0__1mboc sidebarActionsHoverTarget__373c0__2kfhE arrange__373c0__UHqhV gutter-12__373c0__3kguh layout-stack-small__373c0__3cHex border-color--default__373c0__2oFDT"})
+	reviews = []
+	reviews = [get_review(main_container) for main_container in mc]
+	#print(test_container)
+
+	return reviews
+
+"""
+		product_description = main_container.find("div",{"class":"hubo-title__text"}).text.strip()
+
+		product_brand_properties = main_container.find("div",{"class":"product-properties"})
+		product_brand_container = product_brand_properties.find("table").find("tr")
+		product_brand_row = product_brand_container.findAll("td")
+		product_brand = product_brand_row[1].find("strong").text.strip()
+		print("BRAND: " + product_brand)
+	
+		price_block = main_container.find("div",{"class":"price-block right"})
+
+		current_price = price_block.find("div",{"class":"price"}).text.replace(",",".").strip()
+		current_price = current_price.replace("-","00")
+
+		test_discount = main_container.find("div","striped-parent")
+
+		if test_discount:
+			previous_price = price_block.find("div",{"class":"striped-parent"}).text.replace(",",".").strip()
+			previous_price = previous_price.replace("-","00")
+			
+			discount = price_block.find("div",{"class":"discount"}).text
+		else:
+			print("No discounts at the moment.")
+			previous_price = "No Previous Price"
+			discount = "No discounts available"
+
+		print("Product Description: " + product_brand + " " + product_description)
+		print("Current Price: " + current_price)
+		print("Previous Price: " + previous_price)
+		print("Discount: " + discount)
+		
+		f.write(new_ean + "," + product_brand + " " + product_description + "," + current_price + "," + previous_price + "," + discount + "\n")
+
+	except Exception as e:
+		print(new_ean + ": Sorry not found")
+
+		f.write(new_ean + "," + "Sorry not found" + "\n")
+"""
+
+
+#Call Driver / Chrome
+driver = init_driver()
+driver.get(URL)
+#WebDriverWait(driver,90).until(EC.presence_of_element_located((By.CSS_SELECTOR,"#component_18")))
+element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,"html.js body#yelp_main_body.jquery.country-fr.logged-out.react-modal-body.u-bg-color-white div#wrap.lang-fr div.main-content-wrap.main-content-wrap--full div div.lemon--div__373c0__1mboc.spinner-container__373c0__N6Hff.border-color--default__373c0__2oFDT div.lemon--div__373c0__1mboc.u-space-t3.u-space-b6.border-color--default__373c0__2oFDT div.lemon--div__373c0__1mboc.container__373c0__13FCe div.lemon--div__373c0__1mboc.content__373c0__Zrlv5 div.lemon--div__373c0__1mboc.stickySidebar--heightContext__373c0__133M8.tableLayoutFixed__373c0__12cEm.arrange__373c0__UHqhV.u-space-b6.u-padding-b4.border--bottom__373c0__uPbXS.border-color--default__373c0__2oFDT div.lemon--div__373c0__1mboc.arrange-unit__373c0__1piwO.arrange-unit-grid-column--8__373c0__2yTAx.u-padding-r6.border-color--default__373c0__2oFDT section.lemon--section__373c0__fNwDM.u-space-t4.u-padding-t4.border--top__373c0__19Owr.border-color--default__373c0__2oFDT div.lemon--div__373c0__1mboc.border-color--default__373c0__2oFDT")))
+name = get_name()
+
+res = driver.execute_script("return document.documentElement.outerHTML")
+soup = BeautifulSoup(res, "html.parser")
+if LS=="en":
+	driver.find_element_by_css_selector('div.u-space-b3:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > button:nth-child(1)').click()
+	WebDriverWait(driver,10).until(EC.invisibility_of_element_located((By.CSS_SELECTOR,"#dropdown-46bda2f6-5801-44bf-a423-1d2bff9fcf71-en")))
+	time.sleep(3)
+	driver.find_element_by_xpath('/html/body/div[2]/div[3]/div/div[1]/div[3]/div/div/div[2]/div[1]/section[4]/div/section/div[2]/div/div[2]/div/div[2]/div/div[2]/div/ul/li[1]/a/div').click()
+	
+else:
+	driver.find_element_by_css_selector('div.u-space-b3:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > button:nth-child(1)').click()
+	WebDriverWait(driver,10).until(EC.invisibility_of_element_located((By.CSS_SELECTOR,"#dropdown-46bda2f6-5801-44bf-a423-1d2bff9fcf71-fr")))
+	time.sleep(3)
+	driver.find_element_by_xpath('/html/body/div[2]/div[3]/div/div[1]/div[3]/div/div/div[2]/div[1]/section[4]/div/section/div[2]/div/div[2]/div/div[2]/div/div[2]/div/ul/li[2]/a/div').click()
+
+
+time.sleep(3)
+element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,"div.spinner-container__373c0__N6Hff:nth-child(2)")))
+
+pg_count = get_last_page_num()
+count=1
+reset=20
+review_list = []
+
+while(count <= int(pg_count)) :
+	review_list.extend(get_data())
+	li = URL + "?start=" + str(reset) 
+	#li = URL + "&start=" + str(reset) 
+	count = count+1
+	reset = reset + 20
+	driver.get(li)
+	element = driver.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,"div.spinner-container__373c0__N6Hff:nth-child(2)")))
+
+
+		
+
+print("Ecriture dans le fichier csv ...")
+
+# Initialisation de la date pour le nom du fichier
+date = datetime.datetime.now()
+date_complete = str(date.year) + "-" + str(date.month) + "-" + str(date.day)
+
+# Initialisation du fichier csv
+with open("Yelp FR " + name + " - " + date_complete + LS + ".csv",
+ "w",
+  newline="") as csvFile:
+    writer = csv.writer(csvFile)
+    writer.writerow(["name","Date", "Stars", "Text"])
+
+    for review in review_list:
+        try:
+        	if(review!={}):
+        		writer.writerow([review["name"],review["date"], review["star"], review["text"]])
+        except UnicodeEncodeError:
+            pass
+
+print("Ecriture dans le fichier json ...")
+
+# Initialisation du fichier json
+with open("Yelp FR " + name + " - " + date_complete + LS + ".json", "w+") as jsonFile:
+    json.dump(review_list, jsonFile, indent=4)
+
+driver.quit()
+# Write to CSV file
+"""
+filename = "HUBO_products_by_EAN.csv"
+f = open(filename, "w")
+
+headers = "EAN Code, Product Name, Current Price, Previous Price, Discount\n"
+
+f.write(headers)
+"""
+#Run Driver / Chrome
+"""
+for rx in range(cols,rows):
+	print("\n")
+	print(rx, ": ", int(sh.cell(rx,cols-1).value))
+	get_data(driver,int(sh.cell(rx,cols-1).value))
+
+f.close()
+"""
+# Exit Driver / Chrome
+
