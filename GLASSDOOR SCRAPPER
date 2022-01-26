@@ -1,0 +1,255 @@
+# GLASSDOOR SCRAPPER 2019
+
+from selenium import  webdriver
+from bs4 import BeautifulSoup
+import csv
+import json
+import datetime
+import getpass
+from langdetect import detect
+from time import time
+from random import randint
+from time import sleep
+from html import unescape
+import re
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+
+
+# VERSION 2.0
+
+""" --- DONNEES --- """
+
+URL = input("Quel URL à scraper ? > ")
+
+
+""" --- FONCTIONS --- """
+
+def loginUser():
+	""" 
+	Cette fonction permet d'attendre une action de l'utilisateur
+	avant de continuer
+	"""
+	someVariable = getpass.getpass("Appuyez sur Entrée une fois connecté.")
+	return someVariable
+
+def get_name_url(url):
+	"""
+	Fonction permettant de trouver le titre
+	"""
+
+	driver.get(url)
+
+	#html = driver.page_source
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res, "html.parser")
+
+	name_fichier = soup.find("p", {"class": "h1 strong tightAll"}).text.strip()
+
+	return name_fichier
+
+def turn_date(date):
+    """
+    Fonction pour convertir la date
+    """
+    new_date = date[:10]
+
+    return new_date
+
+def dict_reviews(li):
+	
+	emoji_pattern = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
+	dictionnaire_travail = dict()
+
+	# On va chercher date de la review
+	date = li.find("time").get("datetime")
+	dictionnaire_travail["Date"] = turn_date(date)
+	
+
+	# On va chercher le titre de la review
+	top_title1 = li.find("h2",{"class": "h2 summary strong mt-0 mb-xsm"})	
+	top_title = top_title1.find("a", {"class": "reviewLink"}).find("span").text.strip()
+	top_title = emoji_pattern.sub(r'', top_title)
+	dictionnaire_travail["Titre"] = top_title
+
+	# On va chercher le nombre d'étoiles
+	top_stars = li.find("span", {"class": "value-title"}).get("title").replace(".", ",")
+	dictionnaire_travail["Stars"] = top_stars
+	
+	# On va dans le corps de la review
+	txt = li.find("div", {"class": "col-sm-11 pl-sm-lg mx-0"})
+	mainText = txt.find("p", {"class": "mainText mb-0"}).text.strip()
+	mainText = emoji_pattern.sub(r'', mainText).replace("\n","")
+	dictionnaire_travail["Text"] = mainText
+
+
+	# On va dans le corps de la review
+	body = li.findAll("div", {"class": "mt-md"})
+
+	try:
+		cont = body[0].findAll("p", {"class":"strong"})
+		adv = cont[0].find_next('p')
+		dictionnaire_travail["Adv"] = emoji_pattern.sub(r'', adv.text.strip().replace("\n",""))
+	except IndexError as e:
+		dictionnaire_travail["Adv"] = ""
+	try:
+		cont = body[1].findAll("p", {"class":"strong"})
+		disadv = cont[0].find_next('p')
+		dictionnaire_travail["Disadv"] = emoji_pattern.sub(r'', disadv.text.strip().replace("\n",""))
+	except IndexError as e:
+		dictionnaire_travail["Disadv"] = ""
+	try:
+		cont = body[2].findAll("p", {"class":"strong"})
+		advice = cont[0].find_next('p')
+		dictionnaire_travail["Advice"] = emoji_pattern.sub(r'', advice.text.strip().replace("\n",""))
+	except IndexError as e:
+		dictionnaire_travail["Advice"] = ""
+	
+	dictionnaire_travail["Langue"] = detect(dictionnaire_travail["Text"])
+	return dictionnaire_travail
+        
+
+def get_reviews_data(url):
+	"""
+	Fonction allant chercher toutes les reviews
+	"""
+	driver.get(url)
+	sleep(randint(8,15))
+	# The following code inside try block is used so that the dynamic reviews are also present on the page before proceeding with the scraping.
+	# Do not enclose the complete function in try as otherwise it doesn't scrape the pages tat have only 1 review.
+	try:
+		res = driver.execute_script("return document.documentElement.outerHTML")
+		WebDriverWait(driver,90).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".empReview.cf:nth-of-type(2)")))
+	
+	except Exception as e:
+                print("Did not find element!!")
+                liste_travail=[]
+	soup = BeautifulSoup(res, "html.parser")
+
+	reviews_data_container = soup.find("div", {"id": "ReviewsRef"})
+	
+	liste_travail =[]
+	if count == 1:
+		reviews_data = reviews_data_container.findAll("li", {"class": "empReview"})
+		liste_travail = [dict_reviews(li) for li in reviews_data]
+	
+	else:
+	
+		reviews_data = reviews_data_container.findAll("li", {"class": "empReview"})
+		liste_travail = [dict_reviews(li) for li in reviews_data]
+		
+	return liste_travail
+	
+	
+
+def get_testeur():
+
+	#html = driver.page_source
+	res = driver.execute_script("return document.documentElement.outerHTML")
+	soup = BeautifulSoup(res,"html.parser")
+
+	etape = soup.find("li", {"class": "pagination__PaginationStyle__next"}).find("a")
+
+	return etape
+
+""" --- FONCTIONS --- """
+
+""" --- SCRAP --- """
+count = 1
+
+driver = webdriver.Firefox()
+
+driver.get("https://www.glassdoor.fr")
+
+print("Se connecter")
+
+loginUser()
+
+name_fichier = get_name_url(URL)
+
+print(name_fichier)
+
+liste_ecriture = []
+
+print("Connexion ...")
+
+print("Scraping des pages ...")
+
+start_time=time()
+
+driver.get(URL)
+print("URL: "+URL)
+#sleep(randint(8,15))
+elapsed_time= time()-start_time
+
+liste_ecriture.extend(get_reviews_data(URL))
+count=count+1
+
+
+date = datetime.datetime.now()
+date_complete = str(date.year) + "-" + str(date.month) + "-" + str(date.day)
+
+# Initialisation du fichier csv
+with open("Glassdoor "+name_fichier+" - "+date_complete+".csv", "w", encoding='ISO-8859-1', newline = '') as csvFile:
+    writer = csv.writer(csvFile)
+    writer.writerow(["Date","Titre","Stars","Comment","Advantages","Inconvenience","Advice","Langue"])
+    #print(reviews_all)
+    for review in liste_ecriture:
+                try:
+                        writer.writerow([review["Date"],review["Titre"],review["Stars"],review["Text"],review["Adv"],review["Disadv"],review["Advice"],review["Langue"]])
+                except UnicodeEncodeError: pass
+
+with open("Glassdoor "+name_fichier+" - "+date_complete+".json", "w+") as jsonFile:	
+	json.dump(liste_ecriture, jsonFile, indent = 4)
+
+print ("length of main list:"+str(len(liste_ecriture)))
+res = driver.execute_script("return document.documentElement.outerHTML")
+soup = BeautifulSoup(res,"html.parser")
+xyz = ''.join(str(soup.find("li", {"class": "pagination__PaginationStyle__next"}).find("a").get("class")))
+xyz1= xyz.strip().replace("'","").replace("[","").replace("]","").replace(",","")
+print (xyz1)
+
+etape = get_testeur()
+
+liste_ecriture = []
+
+
+while (xyz1 != "pagination__ArrowStyle__nextArrow pagination__ArrowStyle__disabled") :
+	if etape is None :
+		break
+	else :
+		try:
+			etape = get_testeur()
+			testeur = "https://www.glassdoor.fr" + etape.get("href")
+		
+		except AttributeError: etape = None
+
+		liste_ecriture.extend(get_reviews_data(testeur))
+		print (testeur)
+		print ("length of main list:"+str(len(liste_ecriture)))
+		res = driver.execute_script("return document.documentElement.outerHTML")
+		soup = BeautifulSoup(res,"html.parser")
+		xyz = str(soup.find("li", {"class": "pagination__PaginationStyle__next"}).find("a").get("class"))
+		xyz1= xyz.strip().replace("'","").replace("[","").replace("]","").replace(",","")
+		print (xyz1)
+		
+
+	
+	
+with open("Glassdoor "+name_fichier+" - "+date_complete+".csv", "a", encoding='ISO-8859-1', newline = '') as csvFile:
+	writer = csv.writer(csvFile)
+	for review in liste_ecriture:
+		try:
+			writer.writerow([review["Date"],review["Titre"],review["Stars"],review["Text"],review["Adv"],review["Disadv"],review["Advice"],review["Langue"]])
+		except UnicodeEncodeError: pass
+with open("Glassdoor "+name_fichier+" - "+date_complete+".json", "a") as jsonFile:
+	json.dump(liste_ecriture, jsonFile, indent=4)
+	liste_ecriture = []
+	etape = None
+
+print("Les avis de Glassdoor ont été récupérés avec succès !")
+driver.quit()
+
