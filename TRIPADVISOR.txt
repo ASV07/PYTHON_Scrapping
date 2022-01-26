@@ -1,4 +1,4 @@
-TRIPADVISOR
+# TRIPADVISOR scrapper 2019
 
 
 
@@ -19,7 +19,7 @@ import re
 
 # Initialize driver
 
-URL = input("Quel URL à scraper ? > ")
+URL = input("Quel URL Ã  scraper ? > ")
 
 LS = input("In which language do you want to scrape the reviews? Please enter all for all; en for english and fr for french >")
 
@@ -67,7 +67,7 @@ def get_next_url():
 	return link
 
 def make_date(review_post_month):
-	months = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+	months = ["Janvier","FÃ©vrier","Mars","Avril","Mai","Juin","Juillet","AoÃ»t","Septembre","Octobre","Novembre","DÃ©cembre"]
 	j = 0
 	while(j < len(months)):
 		if(review_post_month!=months[j]):
